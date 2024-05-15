@@ -2,8 +2,8 @@ name: Build
 
 on:
   push:
-    tags:
-      - "**"
+    branches:
+      - main
     secrets:
       BUILD_AWS_ACCESS_KEY_ID:
         required: true
@@ -20,10 +20,6 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-
-    - name: Read tag
-      id: get-tag
-      run: echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
 
     - name: Setup Node
       uses: actions/setup-node@v4
@@ -51,7 +47,7 @@ jobs:
       env:
         REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         REPOSITORY: ${{ env.REPOSITORY_NAME }}
-        IMAGE_TAG: ${{ steps.get-tag.outputs.tag }}
+        IMAGE_TAG: ${{ github.sha }}
       run: |
         docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
         docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
