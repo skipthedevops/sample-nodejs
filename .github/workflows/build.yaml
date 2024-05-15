@@ -13,6 +13,7 @@ on:
 # Update this environment variable to match the name of your AWS ECR for this application.
 env:
   REPOSITORY_NAME: sample-nodejs-general
+  PROCESS_ID: 1234
 
 jobs:
   deploy:
@@ -64,3 +65,9 @@ jobs:
         docker image tag $REGISTRY/$REPOSITORY:$IMAGE_TAG $REGISTRY/$REPOSITORY:latest
         docker push $REGISTRY/$REPOSITORY:latest
       
+    - name: Share the image with Skip The DevOps
+      uses: skipthedevops/declare-process-version
+      with:
+        process-id: ${{ env.PROCESS_ID }}
+        tag: ${{ github.sha }}
+        auto-deploy: true
