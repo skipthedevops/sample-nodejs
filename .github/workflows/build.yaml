@@ -66,7 +66,7 @@ jobs:
         docker push $REGISTRY/$REPOSITORY:latest
       
     - name: Share the image with Skip The DevOps
-      uses: skipthedevops/declare-process-version
+      uses: skipthedevops/declare-process-version@1d08c7763c57d8e310a5c1ae38393cf31c445222
       with:
         process-id: ${{ env.PROCESS_ID }}
         tag: ${{ github.sha }}
