@@ -37,9 +37,9 @@ jobs:
       env:
         NODE_ENV: production
 
-    - name: Purge dev libraries
+    - name: Prune dev libraries
       run: |
-        npm purge
+        npm prune
       env:
         NODE_ENV: production
 
