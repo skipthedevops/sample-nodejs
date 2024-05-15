@@ -1,0 +1,60 @@
+name: Build
+
+on:
+  push:
+    tags:
+      - "**"
+    secrets:
+      BUILD_AWS_ACCESS_KEY_ID:
+        required: true
+      BUILD_AWS_SECRET_ACCESS_KEY:
+        required: true
+
+# Update this environment variable to match the name of your AWS ECR for this application.
+env:
+  REPOSITORY_NAME: sample-nodejs-general
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Read tag
+      id: get-tag
+      run: echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
+
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        registry-url: "https://npm.pkg.github.com"
+
+    - name: Build
+      run: |
+        npm run build
+      env:
+        NODE_ENV: production
+
+    - name: Authenticate with AWS
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-region: us-east-1
+        aws-access-key-id: ${{ secrets.BUILD_AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.BUILD_AWS_SECRET_ACCESS_KEY }}
+
+    - name: Login to ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build, tag, and push docker image to Amazon ECR
+      env:
+        REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        REPOSITORY: ${{ env.REPOSITORY_NAME }}
+        IMAGE_TAG: ${{ steps.get-tag.outputs.tag }}
+      run: |
+        docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
+        docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
+        docker image tag $REGISTRY/$REPOSITORY:$IMAGE_TAG $REGISTRY/$REPOSITORY:latest
+        docker push $REGISTRY/$REPOSITORY:latest
+      
