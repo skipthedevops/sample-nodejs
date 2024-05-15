@@ -103,7 +103,7 @@ abstract class Provider {
 }
 
 class StopProvider extends Provider {
-    private timeoutHandle: NodeJS.Timer | null = null
+    private timeoutHandle: NodeJS.Timeout | null = null
     private shouldStopCallback: () => void
 
     private static stopPollIntervalMs = 5000
