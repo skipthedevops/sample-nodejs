@@ -65,7 +65,7 @@ jobs:
         docker image tag $REGISTRY/$REPOSITORY:$IMAGE_TAG $REGISTRY/$REPOSITORY:latest
         docker push $REGISTRY/$REPOSITORY:latest
       
-    - name: Share the image with Skip The DevOps
+    - name: Share the image with Skip the DevOps
       uses: skipthedevops/declare-process-version@828c7903f16dbe8970019e43930710748532afb0
       with:
         process-id: ${{ env.PROCESS_ID }}
