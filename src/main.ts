@@ -51,4 +51,4 @@ const wait = async () => {
     await new Promise((resolve) => setTimeout(resolve, 5 * 1000))
 }
 
-main()
+void main()
