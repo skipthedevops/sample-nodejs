@@ -68,7 +68,7 @@ jobs:
         docker push $REGISTRY/$REPOSITORY:latest
       
     - name: Share the image with Skip the DevOps
-      uses: skipthedevops/declare-process-version@2fe418e1bc2f69ca74dcda3b6973bb9594fc8f8e
+      uses: skipthedevops/declare-process-version@cfda33a01ad182b983e5a78ea6f122bc865f27c5
       with:
         integration-token: ${{ secrets.INTEGRATION_TOKEN }}
         application-integration-id: ${{ vars.PROCESS_ID }}
