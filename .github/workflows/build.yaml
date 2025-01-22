@@ -15,7 +15,7 @@ on:
 # Update this environment variable to match the name of your AWS ECR for this application.
 env:
   REPOSITORY_NAME: sample-nodejs-general
-  PROCESS_ID: 38ddcde8-56bc-4c28-8ff2-48e4b3016f52
+  APPLICATION_ID: 38ddcde8-56bc-4c28-8ff2-48e4b3016f52
 
 jobs:
   deploy:
@@ -68,10 +68,10 @@ jobs:
         docker push $REGISTRY/$REPOSITORY:latest
       
     - name: Share the image with Skip the DevOps
-      uses: skipthedevops/declare-process-version@cfda33a01ad182b983e5a78ea6f122bc865f27c5
+      uses: skipthedevops/declare-process-version@0026f9c8b5d49f429933f8e6f2175ee2877abdce
       with:
         integration-token: ${{ secrets.INTEGRATION_TOKEN }}
-        application-integration-id: ${{ vars.PROCESS_ID }}
+        application-integration-id: ${{ env.APPLICATION_ID }}
         tag: ${{ github.sha }}
         name: ${{ github.event.head_commit.message }}
         auto-deploy: true
