@@ -1,18 +1,19 @@
 import http from 'http'
+import https from 'https'
 
 /**
- * The Skip The DevOps platform provides http endpoints on the same EC2 instance that your docker
- * container is running.  The endpoints are listed below and are indicated by environment variables
- * of the same name.
+ * The Skip The DevOps platform provides http and https endpoints on the same EC2 instance that your
+ * docker container is running.  The endpoints are listed below and are indicated by environment
+ * variables of the same name.
  * 
- * SDO_STOP_URL - This endpoint will provide a JSON serialized boolean which is set to true if your
- *  application needs to stop.  Any active requests or jobs should be completed as quickly as 
- *  possible and the application should then close.  This can occur for a variety of reasons,
- *  which are explained on the Skip The DevOps website.
+ * SDO_STOP_URL - This endpoint will provide a JSON serialized named boolean which is set to true
+ *  if your application needs to stop.  If it is true, any active requests or jobs should be
+ *  completed as quickly as possible and the application should then close.  This can occur for a
+ *  variety of reasons, which are explained on the Skip The DevOps website.
  * 
  * SDO_CREDENTIALS_URL - Allows you to get AWS access keys to any roles that you have specified
  *  should be provided to your application during runtime.  You can specify which roles should be 
- *  provided in the process setup screen in your portal on the Skip The DevOps website.
+ *  provided in the application creation/edit screen in your portal on the Skip The DevOps website.
  */
 
 export class SdoNotifications {
@@ -62,6 +63,7 @@ export class SdoNotifications {
 abstract class Provider {
     abstract initialize(): Promise<void>
     abstract destroy(): void
+    abstract getRequestFunction(): typeof http.request | typeof https.request
 
     protected fetchUrl<T>(url: string | null | undefined): Promise<T | null> {
         return new Promise<T | null>((resolve) => {
@@ -69,29 +71,37 @@ abstract class Provider {
                 // We are running outside the Skip The DevOps environment, so just continue on
                 resolve(null)
             } else {
-                const request = http.request(new URL(url), (response) => {
-                    const statusCode = response.statusCode ?? 0
-                    if (statusCode < 200 || statusCode >= 300) {
-                        console.error(`Calling the Skip The DevOps systems at ${url} failed with status code ${statusCode}.`)
-                        resolve(null)
-                    }
-
-                    let data = ""
-                    response.on("data", (chunk) => {
-                        data += chunk.toString("utf-8")
-                    })
-                    response.on("end", async () => {
-                        if (statusCode >= 200 && statusCode < 300) {
-                            try {
-                                const response = JSON.parse(data)
-                                resolve(response)
-                            } catch (e) {
-                                console.error(`There was an error parsing the response from Skip The DevOps at ${url}`)
-                                resolve(null)
-                            }
+                const request = this.getRequestFunction()(
+                    new URL(url), 
+                    {
+                        // This is required for the https call since the https certificate is self signed.
+                        // It does noting for the http call so can safely be included for both.
+                        rejectUnauthorized: false
+                    },
+                    (response) => {
+                        const statusCode = response.statusCode ?? 0
+                        if (statusCode < 200 || statusCode >= 300) {
+                            console.error(`Calling the Skip The DevOps systems at ${url} failed with status code ${statusCode}.`)
+                            resolve(null)
                         }
-                    })
-                })
+
+                        let data = ""
+                        response.on("data", (chunk) => {
+                            data += chunk.toString("utf-8")
+                        })
+                        response.on("end", async () => {
+                            if (statusCode >= 200 && statusCode < 300) {
+                                try {
+                                    const response = JSON.parse(data)
+                                    resolve(response)
+                                } catch (e) {
+                                    console.error(`There was an error parsing the response from Skip The DevOps.`)
+                                    resolve(null)
+                                }
+                            }
+                        })
+                    }
+                )
                 request.on("error", (e) => {
                     console.error(`There was a problem calling ${url} from the Skip The DevOps systems. ${e}`)
                     resolve(null)
@@ -106,7 +116,7 @@ class StopProvider extends Provider {
     private timeoutHandle: NodeJS.Timeout | null = null
     private shouldStopCallback: () => void
 
-    private static stopPollIntervalMs = 5000
+    private static stopPollIntervalMs = 5000    // 5 seconds
 
     constructor(shouldStopCallback: () => void) {
         super()
@@ -114,9 +124,11 @@ class StopProvider extends Provider {
     }
     
     override async initialize(): Promise<void> {
+        // Start up a timer that will poll the stop endpoint
         this.timeoutHandle = setInterval(async () => {
-            const response = await this.fetchUrl<boolean>(process.env.SDO_STOP_URL)
-            if (response != null && response) {
+            const response = await this.fetchUrl<{stop: boolean}>(process.env.SDO_STOP_URL)
+            if (response != null && response.stop) {
+                console.log("Stop requested")
                 this.shouldStopCallback()
             }
         }, StopProvider.stopPollIntervalMs)
@@ -127,37 +139,56 @@ class StopProvider extends Provider {
             clearInterval(this.timeoutHandle)
         }
     }
+
+    override getRequestFunction(): typeof http.request | typeof https.request {
+        return http.request
+    }
 }
 
 /**
- * Optional provider that updates AWS credentials
+ * Provider that updates AWS credentials
  */
 export class CredentialProvider extends Provider {
-    private readonly credentialTimeBufferMs = 1 * 60 * 1000
-    private readonly minPollingIntervalMs = 1 * 60 * 1000
+    // The extra time before credential expiration we want to get a fresh set of credentials.
+    // This must be less than 5 minutes.
+    private readonly credentialTimeBufferMs = 60 * 1000     //1 minute
+
     private timeoutHandle: NodeJS.Timeout | null = null
 
     /**
      * This key needs to match the key you specified when setting up the role mapping on the
      * Skip The DevOps website process setup screen.
+     * 
+     * You could provide multiple keys to your application which map to seperate roles if your
+     * IAM roles are set up that way.  In this example, we just show a single role setup.
      */
     private static readonly credentialsKey = "AwsAccess"
 
     override async initialize(): Promise<void> {
-        const credentials = await this.fetchUrl<Record<string, Credentials>>(
+        const response = await this.fetchUrl<{
+            expirationEpoch: number,
+            credentials: Record<string, Credentials>
+        }>(
             process.env.SDO_CREDENTIALS_URL
         )
-        if (credentials == null) {
+        if (response == null) {
             // We are running locally so just continue on
+            console.log(`Local run detected when trying to retrieve AWS credentials.`)
             return
         }
 
         // Set the credentials
-        const clientAccessCredentials = credentials[CredentialProvider.credentialsKey]
+        //
+        // Not that we are setting the environment variables that are typically used
+        // for the AWS SDK in this example but you will likely want to actively replace
+        // and open clients which would have already read these values into memory and
+        // will need to be re-created.
+        const clientAccessCredentials = response.credentials[CredentialProvider.credentialsKey]
         if (clientAccessCredentials == null) {
-            console.error("Missing aws credentials")
+            console.error(`Missing aws credentials for role ${CredentialProvider.credentialsKey}`)
             return
         }
+        console.log(`Setting credentials for role ${CredentialProvider.credentialsKey}`)
         process.env.AWS_ACCESS_KEY_ID = clientAccessCredentials.accessKeyId
         process.env.AWS_SECRET_ACCESS_KEY = clientAccessCredentials.secretAccessKey
         process.env.AWS_SESSION_TOKEN = clientAccessCredentials.sessionToken
@@ -165,11 +196,8 @@ export class CredentialProvider extends Provider {
 
         // Prepare for the next pull
         const nowMs = (new Date()).getTime()
-        const expirationDate = new Date(clientAccessCredentials.expiration)
-        let msTillExpiration = expirationDate.getTime() - nowMs - this.credentialTimeBufferMs
-        if (msTillExpiration < this.minPollingIntervalMs) {
-            msTillExpiration = this.minPollingIntervalMs
-        }
+        const expirationDate = new Date(response.expirationEpoch)
+        const msTillExpiration = expirationDate.getTime() - nowMs - this.credentialTimeBufferMs
 
         this.timeoutHandle = setTimeout(() => this.initialize(), msTillExpiration)
     }
@@ -179,12 +207,15 @@ export class CredentialProvider extends Provider {
             clearTimeout(this.timeoutHandle)
         }
     }
+
+    override getRequestFunction(): typeof http.request | typeof https.request {
+        return https.request
+    }
 }
 
 type Credentials = {
     accessKeyId: string,
     secretAccessKey: string,
     sessionToken: string,
-    region: string,
-    expiration: Date
+    region: string
 }
