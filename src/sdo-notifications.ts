@@ -125,13 +125,15 @@ class StopProvider extends Provider {
     
     override async initialize(): Promise<void> {
         // Start up a timer that will poll the stop endpoint
-        this.timeoutHandle = setInterval(async () => {
+        const stopPollingFunction = async () => {
             const response = await this.fetchUrl<{stop: boolean}>(process.env.SDO_STOP_URL)
             if (response != null && response.stop) {
                 console.log("Stop requested")
                 this.shouldStopCallback()
             }
-        }, StopProvider.stopPollIntervalMs)
+        }
+        await stopPollingFunction()
+        this.timeoutHandle = setInterval(stopPollingFunction, StopProvider.stopPollIntervalMs)
     }
 
     override destroy() {

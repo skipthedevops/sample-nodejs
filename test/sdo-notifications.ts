@@ -22,14 +22,14 @@ describe("SdoNotifications", () => {
         process.env.SDO_STOP_URL = "http://localhost/"
         let urlCalled = false
         
-        httpGetStub.callsFake((url: URL, callback: any) => {
+        httpGetStub.callsFake((url: URL, options: any, callback: any) => {
             if (url.toString() == process.env.SDO_STOP_URL) {
                 callback({
                     statusCode: 200,
                     on: (eventName: string, eventCallback: any) => {
                         switch (eventName) {
                             case "data":
-                                eventCallback("true")
+                                eventCallback(`{"stop": true}`)
                                 break
                             case "end":
                                 eventCallback()
@@ -59,4 +59,4 @@ describe("SdoNotifications", () => {
     })
 })
 
-const wait = () => new Promise<void>(resolve => setTimeout(resolve, 1))
+const wait = () => new Promise<void>(resolve => setTimeout(resolve, 1000))
