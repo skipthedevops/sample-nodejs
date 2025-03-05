@@ -15,7 +15,6 @@ on:
 # Update this environment variable to match the name of your AWS ECR for this application.
 env:
   REPOSITORY_NAME: sample-nodejs-general
-  APPLICATION_INTEGRATION_ID: 38ddcde8-56bc-4c28-8ff2-48e4b3016f52
 
 jobs:
   deploy:
@@ -71,7 +70,7 @@ jobs:
       uses: skipthedevops/declare-process-version@v1
       with:
         integration-token: ${{ secrets.INTEGRATION_TOKEN }}
-        application-integration-id: ${{ env.APPLICATION_INTEGRATION_ID }}
+        application-integration-id: ${{ vars.APPLICATION_INTEGRATION_ID }}
         tag: ${{ github.sha }}
         name: ${{ github.event.head_commit.message }}
         auto-deploy: true
